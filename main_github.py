@@ -1,16 +1,21 @@
-# 1. Создаем объет Пользователь соц. сети USER_SocNet (имя соц.сети и ID пользователя)
-# 2. Создаем метод сохранить фото в хранилище (имя хранилища, токен и название папки)
-## 2.1 Признаки фоток заданы
-## 2.2 Отчет о переносе фоток в JSON формате в файл сохранить в папку и вывести на экран
-## 2.3 Прогресс-бар процесса загрузки
+# 1. Создаем объет Пользователь соц. сети USER_SocNet -
+# (имя соц.сети и ID пользователя)
+# 2. Создаем метод сохранить фото в хранилище:
+# (имя хранилища, токен и название папки)
+# 2.1 Признаки фоток заданы
+# 2.2 Отчет о переносе фоток в JSON формате в файл сохранить
+# в папку и вывести на экран
+# 2.3 Прогресс-бар процесса загрузки
 
 import time
 import json
 import requests
 from pprint import pprint
 
+
 # Print iterations progress
-def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
+def print_progress_bar(iteration, total, prefix = '', suffix = '', decimals = 1,\
+    length = 100, fill = '█', printEnd = "\r"):
     """
     Call in a loop to create terminal progress bar
     @params:
@@ -22,6 +27,7 @@ def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, 
         length      - Optional  : character length of bar (Int)
         fill        - Optional  : bar fill character (Str)
         printEnd    - Optional  : end character (e.g. "\r", "\r\n") (Str)
+
     """
     percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
     filledLength = int(length * iteration // total)
@@ -33,8 +39,6 @@ def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, 
 
 
 # Документация по API VK: https://vk.com/dev
-# Токен для VK api:
-TOKEN_VK = '958eb5d439726565e9333aa30e50e0f937ee432e927f0dbd541c541887d919a7c56f95c04217915c32008'
 
 # константы: названия соц. сетей
 SOCIAL_NET_VK = 'VK' # ВКонтаке
@@ -46,9 +50,10 @@ SOCIAL_NET_FB = 'FB' # Фейсбук
 YANDEX_DISK = 'YD' # Яндекс.Диск
 GOOGLE_DRIVE = 'GD' # Гугл.Диск
 
-class User_SocNet:
+class UserSocNet:
     """
     Класс - пользователь социальной сети
+
     """
 
     # Префикс доступа к профилю VK:
@@ -57,11 +62,51 @@ class User_SocNet:
     API_VK_URL = 'https://api.vk.com/method'
     # Метод получения фотографий
     VK_METHOD_PHOTOS_GET='/photos.get'
+     # Метод получения инфо о пользователе:
+    VK_METHOD_USERS_GET='/users.get'
 
-    def __init__(self, soc_net_name, token, user_id) -> None:
+    def __init__(self, soc_net_name, token, user_id_or_name) -> None:
         self.soc_net_name = soc_net_name
         self.token = token
-        self.user_id = user_id
+        self.user_id_or_name = user_id_or_name
+
+        if isinstance(self.user_id_or_name,int):
+            self.user_id = self.user_id_or_name
+        else:
+            self.user_id = self.get_user_ID_by_user_name(self.user_id_or_name)
+
+    # получить ID пользователя, при необходимости:
+
+    def get_user_ID_by_user_name(self, user_name):
+        """
+        Получить ID пользователя по его имени
+        :param user_name:
+        :return:
+        """
+        ID = -1
+
+        if self.soc_net_name == SOCIAL_NET_VK:
+            #запрос
+            response = requests.get(
+                self.API_VK_URL + self.VK_METHOD_USERS_GET,
+                params={
+                    'access_token': self.token,
+                    'user_ids': user_name,
+                    'v': 5.21
+                }
+            )
+        else:
+            print('Не найден API соц. сети!')
+            return ID
+
+        # проверка на error: есть ли в ответе ключ "error"
+        if response.json().get('error'):
+            print(f"Ошибка: {response.json()['error']['error_code']}")
+            return ID
+        else:
+            ID = response.json()['response'][0]['id']
+
+        return ID
 
 
     def get_photo (self, num_photos=5) -> list:
@@ -69,6 +114,7 @@ class User_SocNet:
         Получаем список из num_photos фотографий в виде списка
         По умолчанию - первых 5 фото
         :return:
+
         """
         album = []
 
@@ -131,7 +177,7 @@ class User_SocNet:
         return album
 
 
-    def save_file_to(self, store_name, token, list_info, folder_name='') -> dict:
+    def save_file_to(self, store_name, token, list_info, num_photos, folder_name='') -> dict:
         """
         Сохраняем файлы на диск в облаке в указанную папку. Источник файлов описан в json_info
         :param store_name:
@@ -139,6 +185,7 @@ class User_SocNet:
         :param json_info:
         :param folder_name:
         :return:
+
         """
 
         #token = ''
@@ -174,8 +221,11 @@ class User_SocNet:
             # закачиваем файлы
             num_files = len(list_info)
             # Инициируем прогресс-бар
-            printProgressBar(0, num_files, prefix='Процесс загрузки файлов:', suffix='Завершено', length=50)
+            print_progress_bar(0, num_files, prefix='Процесс загрузки файлов:', suffix='Завершено', length=50)
             for i,file in enumerate(list_info):
+
+                if i == num_photos:
+                    break
 
                 operation_rep=dict()
                 file_name=file['file_name'] + '.' + file['file_ext']
@@ -196,7 +246,7 @@ class User_SocNet:
 
                 operation_rep['file_name']=file_name
                 operation_rep['size'] = file['size']
-                printProgressBar(i+1, num_files, prefix='Процесс загрузки файлов:', suffix='Завершено', length=50)
+                print_progress_bar(i+1, num_files, prefix='Процесс загрузки файлов:', suffix='Завершено', length=50)
 
                 # запись в отчет
                 report['files'].append(operation_rep)
@@ -215,22 +265,82 @@ class User_SocNet:
 
         :return:
         """
-        return (str(f'Пользователь сети {self.soc_net_name} {self.PROFILE_VK_URL+str(self.user_id)}. {self.__dict__}. {self.__class__}'))
+        return (str(f'Пользователь сети {self.soc_net_name}\
+            {self.PROFILE_VK_URL+str(self.user_id)}. {self.__dict__}. {self.__class__}'))
+
+
 
 def main():
+    # -----------------------------------------------------------------
+    # owner_id = 1 (Павел Дуров)
+    # получаем Username или ID пользователя VK:
 
-    #owner_id = 1 (Павел Дуров)
-    user_vk = User_SocNet(SOCIAL_NET_VK,TOKEN_VK,1)
+    social_net_data = input('Выберите название социальной сети\n\
+        <ВКонтакте - 1,\n\
+        Одноклассники - 2 ( ** В данной версии недоступно! **),\n\
+        Instagram - 3 ( ** В данной версии недоступно! **)\n\
+        Facebook - 4 ( ** В данной версии недоступно! **)>: ')
+
+    if not social_net_data.isdigit():
+        print('\nВы ввели некорреткное название соц.сети!')
+        return -1
+    else:
+
+        if int(social_net_data) == 1:
+            social_net_name = SOCIAL_NET_VK
+        #elif int(social_net_data) == 2:
+        #   social_net_name = SOCIAL_NET_OK
+        #elif int(social_net_data) == 3:
+        #   social_net_name = SOCIAL_NET_IG
+        #elif int(social_net_data) == 4:
+        #   social_net_name = SOCIAL_NET_FB
+        else:
+            print('\nВы ввели некорреткное название соц.сети!')
+            return -1
+
+
+    user_data = input('Введите идентификатор пользователя (ID) или его короткое имя: ')
+    token = input('Введите токен для доступа к API соц. сети: ')
+
+    user_vk = UserSocNet(social_net_name, token, user_data)
+    print('\n******************************************************')
     print(user_vk)
 
-    album=user_vk.get_photo(8)
+    album = user_vk.get_photo(8)
     print(type(album))
     print(f'Найдено {len(album)} фотографий')
-    #pprint(album)
+    # pprint(album)
 
-    res=user_vk.save_file_to(YANDEX_DISK,'',album,'FolderTest2')
-    print('Отчет (продублирован на диске в файле report.json):')
+
+    # -----------------------------------------------------------------
+    sky_data = input('Выберите облачный ресурс для хранения фото\n\
+         <Яндекс.Диск - 1,\n\
+         Google.Drive - 2 ( ** В данной версии недоступно! **)>: ')
+
+    if not sky_data.isdigit():
+        print('\nВы ввели некорреткное название хранилища!')
+        return (-1)
+    else:
+        if int(sky_data) == 1:
+            disk_net_name = YANDEX_DISK
+        # elif int(sky_data) == 2:
+        #   disk_net_name = GOOGLE_DRIVE
+        else:
+            print('\nВы ввели некорреткное название хранилища!')
+            return (-1)
+
+    folder_name = input('Введите наименование папки: ')
+    token = input('Введите токен для доступа к хранилищу: ')
+    num_photos = input(f'Введите количество фото для сохранения в хранилище (от 0 до {len(album)}): ')
+
+    if (not num_photos.isdigit() or ((int(num_photos) < 0) and (int(num_photos) > len(album)))):
+        print('\nВы ввели некорреткное количество фото!')
+        return -2
+
+    res = user_vk.save_file_to(disk_net_name, token, album, int(num_photos), folder_name)
+    print('\nОтчет (продублирован на диске в файле report.json):')
     pprint(res)
 
-if __name__=='__main__':
+if __name__ == '__main__':
     main()
+
